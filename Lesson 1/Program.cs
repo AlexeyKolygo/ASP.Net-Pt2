@@ -1,26 +1,41 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Lesson_1
 {
-    class Program
+    public class Program
     {
-        static readonly HttpClient client = new HttpClient();
+        private static readonly List<ResponseModel> ResultList = new();
+
         static async Task Main(string[] args)
         {
             AppFilesChk();
+            var tasks = new List<Task>();
+            var reslist = new List<ResponseModel>();
             for (int i = 4; i <= 13; i++)
             {
-                await GetResponse(i);
+                tasks.Add(GetResponse(i));
             }
+
+            await Task.WhenAll(tasks);
             
+            foreach (var r in ResultList.OrderBy(x =>x?.InsertDate))
+            {
+                await File.AppendAllLinesAsync(
+                    "result.txt",
+                    new string[] { r.UserId.ToString(), r.Id.ToString(), r.Title, r.Body,r.InsertDate?.ToString("o") });
+                await File.AppendAllTextAsync("result.txt", "\n");
+            }
+
         }
 
-        public static void AppFilesChk()
+
+        static  void AppFilesChk()
         {
             var history = Path.Combine(Directory.GetCurrentDirectory(), "result.txt");
             if (!File.Exists(history))
@@ -32,29 +47,27 @@ namespace Lesson_1
 
         static async Task GetResponse(int i)
         {
-
+            var client = new HttpClient();
             try
             {
                 HttpResponseMessage response = await client.GetAsync($"https://jsonplaceholder.typicode.com/posts/{i}");
                 response.EnsureSuccessStatusCode();
                 var responseBody = await response.Content.ReadFromJsonAsync<ResponseModel>();
-                await File.AppendAllLinesAsync(
-                    "result.txt",
-                    new string[] { responseBody.userId.ToString(),responseBody.id.ToString(), responseBody.title,responseBody.body});
-                await File.AppendAllTextAsync("result.txt","\n");
-          
-                Console.WriteLine($"Got response from {responseBody.id}");
+                if (responseBody != null)
+                {
+                    responseBody.InsertDate = DateTime.Now;
+                    ResultList.Add(responseBody);
+                    Console.WriteLine($"Got response from {responseBody.Id}");
+                }
             }
             catch (HttpRequestException e)
             {
-                await File.AppendAllLinesAsync(
-                    "result.txt",
-                    new string[] {$"ERROR:{e.Message}, id:{i}" });
-                await File.AppendAllTextAsync("result.txt", "\n");
                 Console.WriteLine($"\nException Caught for id:{i}");
                 Console.WriteLine("Message :{0} ", e.Message);
             }
 
         }
+
+
     }
 }
